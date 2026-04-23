@@ -832,7 +832,7 @@ def handle_tool(input_text: str = None) -> str:
     
     Args:
         input_text: 查询文本，支持三种格式：
-            - 生产单号查询: "订单 *202608066" 或 "*202608066 进度"
+            - 生产单号查询: "订单 *202607578" 或 "*202607578 进度"
             - 客户姓名查询: "客户 刘浩（员工） 订单" 或 "刘浩的订单"
             - 流水号查询: "流水号 11374" 或 "查流水号 11374 订单"
     
@@ -840,7 +840,7 @@ def handle_tool(input_text: str = None) -> str:
         str: 查询结果文本
     """
     if not input_text:
-        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374"
+        return "请提供查询内容，例如：\n- 订单 *202607578\n- 客户 刘浩（员工） 订单\n- 流水号 11374"
     
     try:
         result = execute_query_new(input_text)
