@@ -146,7 +146,7 @@ def get_token():
 def query_order_info(order_id=None):
     """
     使用API查询订单详情，获取量体信息、面料信息和订单备注
-    必须使用订单ID(orderId)来查询，否则返回空数据或测试数据
+    必须使用订单ID(id)来查询，否则返回空数据或测试数据
     order_id: 订单主表ID（从订单分页API获取的id字段）
     """
     info_url = QUERY_CONFIG["info_url"]
@@ -164,8 +164,8 @@ def query_order_info(order_id=None):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
-    # 必须使用orderId参数，否则返回空数据或固定测试数据
-    request_data = {"orderId": order_id}
+    # 必须使用id参数，否则返回空数据或固定测试数据
+    request_data = {"id": order_id}
     
     try:
         response = requests.post(info_url, headers=headers, json=request_data, timeout=10)
@@ -240,9 +240,8 @@ def query_order_page(params):
     }
     
     request_data = {
-        "pageNum": params.get("page", 1),
-        "pageSize": 20,
-        "isExport": True
+        "page": params.get("page", 1),
+        "size": 1000
     }
     
     # 添加查询条件
@@ -591,13 +590,21 @@ def execute_query_new(input_text):
         else:
             print(f"   ✗ 未获取到订单明细")
         
-        # 步骤3: 查询生产进度
-        print(f"\n🔍 步骤3: 查询生产进度...")
+        # 步骤3: 查询订单详情获取生产单号
+        print(f"\n🔍 步骤3: 查询订单详情获取生产单号...")
+        order_info = query_order_info(order_id) if order_id else None
+        if order_info:
+            prod_no = order_info.get("prodNo", "")
+            if prod_no:
+                print(f"   ✓ 获取到生产单号: {prod_no}")
+        
+        # 步骤4: 查询生产进度
+        print(f"\n🔍 步骤4: 查询生产进度...")
         if not progress_data:  # 如果还没有获取到progress_data
-            if order_no:
-                progress_data = query_progress_by_order_numbers([order_no])
-            if (not progress_data or len(progress_data) == 0) and prod_no:
+            if prod_no:
                 progress_data = query_progress_by_order_numbers([prod_no])
+            if (not progress_data or len(progress_data) == 0) and order_no:
+                progress_data = query_progress_by_order_numbers([order_no])
         
         if progress_data and len(progress_data) > 0:
             print(f"   ✓ 获取到生产进度")
@@ -672,17 +679,28 @@ def execute_query_new(input_text):
         print(f"   ✓ 订单号: {order_no}")
         print(f"   ✓ 获取到 {len(items_info)} 条匹配的明细")
         
-        # 步骤2: 查询生产进度
-        print(f"\n🔍 步骤2: 查询生产进度...")
+        # 步骤2: 查询订单详情获取生产单号
+        print(f"\n🔍 步骤2: 查询订单详情获取生产单号...")
+        order_info = query_order_info(order_id) if order_id else None
+        if order_info:
+            prod_no = order_info.get("prodNo", "")
+            if prod_no:
+                print(f"   ✓ 获取到生产单号: {prod_no}")
+        
+        # 步骤3: 查询生产进度
+        print(f"\n🔍 步骤3: 查询生产进度...")
         progress_data = None
         
-        if order_no:
-            progress_data = query_progress_by_order_numbers([order_no])
-            if not progress_data or len(progress_data) == 0:
-                # 如果订单号查询失败，尝试用带星号的订单号查询
-                progress_data = query_progress_by_order_numbers([f"*{order_no}"])
+        if prod_no:
+            progress_data = query_progress_by_order_numbers([prod_no])
+        if not progress_data or len(progress_data) == 0:
+            # 如果生产单号查询失败，尝试用订单号查询
+            if order_no:
+                progress_data = query_progress_by_order_numbers([order_no])
+                if not progress_data or len(progress_data) == 0:
+                    progress_data = query_progress_by_order_numbers([f"*{order_no}"])
         
-        # 如果订单号查询失败，尝试用流水号作为生产单号查询
+        # 如果还是失败，尝试用流水号作为生产单号查询
         if not progress_data or len(progress_data) == 0:
             progress_data = query_progress_by_order_numbers([f"*{serial_no}"])
         
@@ -832,7 +850,7 @@ def handle_tool(input_text: str = None) -> str:
     
     Args:
         input_text: 查询文本，支持三种格式：
-            - 生产单号查询: "订单 *202607578" 或 "*202607578 进度"
+            - 生产单号查询: "订单 *202608066" 或 "*202608066 进度"
             - 客户姓名查询: "客户 刘浩（员工） 订单" 或 "刘浩的订单"
             - 流水号查询: "流水号 11374" 或 "查流水号 11374 订单"
     
@@ -840,7 +858,7 @@ def handle_tool(input_text: str = None) -> str:
         str: 查询结果文本
     """
     if not input_text:
-        return "请提供查询内容，例如：\n- 订单 *202607578\n- 客户 刘浩（员工） 订单\n- 流水号 11374"
+        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374"
     
     try:
         result = execute_query_new(input_text)
