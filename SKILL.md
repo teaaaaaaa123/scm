@@ -1,49 +1,73 @@
-# SCM 订单查询技能
+---
+name: scm_order_query
+description: 查询服装订单的生产进度信息，支持生产单号、客户姓名、流水号三种查询方式
+metadata:
+  {
+    "openclaw": {
+      "emoji": "📦",
+      "os": ["darwin", "linux", "win32"],
+      "requires": {
+        "bins": ["python3"],
+        "anyBins": ["python"]
+      }
+    }
+  }
+---
 
-## 技能概述
+# SCM订单查询
 
-本技能用于查询服装订单的生产进度信息，支持通过生产单号、客户姓名或流水号进行查询。
+查询服装订单的生产进度信息。
 
-## 技能配置
+## 使用场景
 
-### 基本信息
-- **技能名称**: SCM订单查询
-- **技能标识**: scm_order_query
-- **版本**: 1.0
-- **作者**: SCM团队
-- **描述**: 查询服装订单的生产进度信息
+✅ **USE when:**
+- 用户需要查询服装订单的生产进度
+- 用户提供生产单号、客户姓名或流水号
 
-### 依赖要求
-- Python 3.6+
-- requests 库
+❌ **DON'T use when:**
+- 用户没有提供任何查询条件
+- 查询条件格式不正确
 
-### 入口函数
-```python
-from scm_query_api import handle_tool
+## 快速开始
+
+```bash
+# 生产单号查询
+python scm_query_api.py 订单 *202607578
+
+# 客户姓名查询
+python scm_query_api.py 客户 刘浩（员工） 订单
+
+# 流水号查询
+python scm_query_api.py 流水号 11374
 ```
 
-## 输入参数
+## 触发关键词
 
-| 参数名 | 类型 | 必选 | 描述 |
-|--------|------|------|------|
-| input_text | string | 是 | 查询文本，支持三种格式 |
+- 订单 *202608066
+- *202608066 进度
+- 客户 刘浩（员工） 订单
+- 刘浩的订单
+- 流水号 11374
+- 查流水号 11374 订单
 
-### 支持的查询格式
+## 参数说明
 
-| 查询类型 | 格式示例 | 说明 |
-|---------|---------|------|
-| 生产单号 | `订单 *202608066` | 查询指定生产单号的订单 |
-| 生产单号 | `*202608066 进度` | 查询指定生产单号的进度 |
-| 客户姓名 | `客户 刘浩（员工） 订单` | 查询指定客户的订单 |
-| 客户姓名 | `刘浩的订单` | 查询指定客户的订单（简写） |
-| 流水号 | `流水号 11374` | 查询指定流水号的订单 |
-| 流水号 | `查流水号 11374 订单` | 查询指定流水号的订单 |
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| input_text | string | 查询文本，支持生产单号、客户姓名、流水号三种格式 |
 
-## 输出格式
+## 工具调用
 
-返回字符串类型的查询结果，包含以下信息：
+```json
+{
+  "name": "scm_order_query",
+  "plugin": "python",
+  "command": ["python", "scm_query_api.py", "{{input_text}}"]
+}
+```
 
-### 成功响应
+## 输出示例
+
 ```
 订单进度：客户 肖欢奇（员工）
 ----------------------------------------
@@ -54,93 +78,13 @@ from scm_query_api import handle_tool
     🔄 进度: 发料:未完成 | 前道:未完成 | 中道:未完成 | 后道:未完成 | 入库:未完成 | 出库:未完成
 ```
 
-### 失败响应
-```
-未找到匹配的订单信息
-```
+## 依赖安装
 
-## 使用示例
-
-### Python 调用
-```python
-from scm_query_api import handle_tool
-
-# 查询生产单号
-result = handle_tool("订单 *202608066")
-print(result)
-
-# 查询客户姓名
-result = handle_tool("客户 肖欢奇（员工） 订单")
-print(result)
-
-# 查询流水号
-result = handle_tool("流水号 13718")
-print(result)
-```
-
-### OpenClaw 工具配置
-
-在 `tool_config.json` 中配置：
-```json
-{
-    "name": "SCM订单查询",
-    "description": "查询服装订单的生产进度信息",
-    "type": "python",
-    "module": "scm_query_api",
-    "function": "handle_tool",
-    "parameters": [
-        {
-            "name": "input_text",
-            "type": "string",
-            "description": "查询文本，如：订单 *202608066 或 客户 刘浩（员工） 订单 或 流水号 11374"
-        }
-    ],
-    "return_type": "string",
-    "return_description": "订单查询结果"
-}
-```
-
-## 技能特性
-
-### 功能特点
-- ✅ 支持生产单号、客户姓名、流水号三种查询方式
-- ✅ 自动获取认证令牌，无需手动配置
-- ✅ 返回完整的订单信息（订单号、明细、量体信息、生产进度）
-- ✅ 支持中文客户姓名查询（包括特殊字符如"（员工）"）
-
-### 注意事项
-1. 生产单号通常以 `*` 开头，如 `*202608066`
-2. 客户姓名支持精确匹配，建议使用完整姓名
-3. 流水号为纯数字，如 `11374`
-4. 需要网络连接，首次查询可能需要稍等获取认证令牌
-5. 如果生产进度显示"未获取到生产进度"，可能是订单还未进入生产环节
-
-## 安装说明
-
-### 环境要求
 ```bash
-# 安装 Python 依赖
 pip install requests
 ```
 
-### 文件结构
-```
-scm_unified_query/
-├── scm_query_api.py      # 核心查询脚本
-├── skill.md              # 技能说明文档
-├── tool_config.json      # OpenClaw工具配置
-└── README.md             # 原始说明文档
-```
+## 相关文件
 
-### 部署步骤
-1. 将 `scm_query_api.py` 放置到 OpenClaw 的工具目录
-2. 配置 `tool_config.json` 文件
-3. 在 OpenClaw 中加载该技能
-
-## 更新日志
-
-### v1.0
-- 初始版本
-- 支持生产单号、客户姓名、流水号三种查询方式
-- 添加 OpenClaw 适配支持
-- 修复订单分页API查询问题（添加 `isExport=true` 参数）
+- `scm_query_api.py` - 核心查询脚本
+- `tool_config.json` - OpenClaw工具配置
