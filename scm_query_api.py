@@ -27,8 +27,8 @@ QUERY_CONFIG = {
     "login_url": "http://api.ceyadi.cn/v1/oauth/getToken",
     
     # 认证配置
-    "access_key_id": "NeIFPBmDEbfs2Brp",
-    "access_key_secret": "ec976ad7959b2245b7d3e002002e22b2",
+    "access_key_id": "XX",
+    "access_key_secret": "XX",
     
     # 缓存的token
     "cached_token": None,
