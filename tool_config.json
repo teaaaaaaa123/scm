@@ -1,0 +1,24 @@
+{
+    "name": "SCM订单查询",
+    "description": "查询服装订单的生产进度信息，支持生产单号、客户姓名、流水号三种查询方式",
+    "type": "python",
+    "module": "scm_query_api",
+    "function": "handle_tool",
+    "parameters": [
+        {
+            "name": "input_text",
+            "type": "string",
+            "required": true,
+            "description": "查询文本，支持三种格式：\n1. 生产单号查询：订单 *202608066 或 *202608066 进度\n2. 客户姓名查询：客户 刘浩（员工） 订单 或 刘浩的订单\n3. 流水号查询：流水号 11374 或 查流水号 11374 订单"
+        }
+    ],
+    "return_type": "string",
+    "return_description": "订单查询结果，包含订单号、明细信息、量体信息和生产进度",
+    "version": "1.0",
+    "author": "SCM团队",
+    "dependencies": [
+        "requests"
+    ],
+    "platform": "cross",
+    "timeout": 30
+}
