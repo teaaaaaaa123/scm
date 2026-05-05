@@ -16,6 +16,20 @@ import json
 import sys
 import argparse
 import requests
+import base64
+from io import BytesIO
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+try:
+    import pytesseract
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
 
 # 查询配置
 QUERY_CONFIG = {
@@ -27,8 +41,8 @@ QUERY_CONFIG = {
     "login_url": "http://api.ceyadi.cn/v1/oauth/getToken",
     
     # 认证配置
-    "access_key_id": "XX",
-    "access_key_secret": "XX",
+    "access_key_id": "NeIFPBmDEbfs2Brp",
+    "access_key_secret": "ec976ad7959b2245b7d3e002002e22b2",
     
     # 缓存的token
     "cached_token": None,
@@ -101,6 +115,148 @@ def parse_query(input_text):
                     "match": match.group(0)
                 }
     return None
+
+def extract_text_from_image(image_data):
+    """
+    从图片中提取文字
+    
+    Args:
+        image_data: 图片数据，支持以下格式：
+            - base64编码字符串
+            - 图片文件路径
+            - PIL Image对象
+            - bytes数据
+    
+    Returns:
+        str: 识别出的文字
+    """
+    if not PIL_AVAILABLE:
+        return None, "PIL库未安装，无法处理图片。请安装: pip install Pillow"
+    
+    if not TESSERACT_AVAILABLE:
+        return None, "pytesseract库未安装，无法进行OCR识别。请安装: pip install pytesseract"
+    
+    try:
+        img = None
+        
+        if isinstance(image_data, str):
+            if image_data.startswith('data:image'):
+                image_data = image_data.split(',', 1)[1]
+            
+            if image_data.startswith('/'):
+                img = Image.open(image_data)
+            else:
+                try:
+                    image_bytes = base64.b64decode(image_data)
+                    img = Image.open(BytesIO(image_bytes))
+                except:
+                    img = Image.open(image_data)
+        elif isinstance(image_data, bytes):
+            img = Image.open(BytesIO(image_data))
+        elif isinstance(image_data, Image.Image):
+            img = image_data
+        else:
+            return None, f"不支持的图片格式: {type(image_data)}"
+        
+        text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+        
+        return text.strip(), None
+        
+    except Exception as e:
+        return None, f"图片处理失败: {str(e)}"
+
+def extract_query_from_text(text):
+    """
+    从识别的文字中提取查询信息
+    
+    Args:
+        text: OCR识别的文字
+    
+    Returns:
+        dict: 包含查询类型和参数的字典
+    """
+    if not text:
+        return None
+    
+    prod_no_patterns = [
+        r'\*?\d{8,9}',
+        r'生产单号[：:\s]*(\*?\d{8,9})',
+        r'订单号[：:\s]*(\*?\d{8,9})',
+    ]
+    
+    for pattern in prod_no_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            prod_no = matches[0]
+            if not prod_no.startswith('*'):
+                prod_no = '*' + prod_no
+            return {
+                "type": "order",
+                "params": [prod_no],
+                "text": text,
+                "extracted": f"生产单号: {prod_no}"
+            }
+    
+    serial_patterns = [
+        r'流水号[：:\s]*(\d{5,6})',
+        r'编号[：:\s]*(\d{5,6})',
+        r'(?:^|\s)(\d{5,6})(?:\s|$)',
+    ]
+    
+    for pattern in serial_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            return {
+                "type": "serial",
+                "params": [matches[0]],
+                "text": text,
+                "extracted": f"流水号: {matches[0]}"
+            }
+    
+    customer_patterns = [
+        r'客户[：:\s]*([^\s\n]{2,10})',
+        r'姓名[：:\s]*([^\s\n]{2,10})',
+        r'收货人[：:\s]*([^\s\n]{2,10})',
+    ]
+    
+    for pattern in customer_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            customer_name = matches[0].strip()
+            if len(customer_name) >= 2:
+                return {
+                    "type": "customer",
+                    "params": [customer_name],
+                    "text": text,
+                    "extracted": f"客户姓名: {customer_name}"
+                }
+    
+    return None
+
+def process_image_query(image_data):
+    """
+    处理图片查询
+    
+    Args:
+        image_data: 图片数据
+    
+    Returns:
+        tuple: (query_info, error_message)
+    """
+    text, error = extract_text_from_image(image_data)
+    
+    if error:
+        return None, error
+    
+    if not text:
+        return None, "图片中未识别到文字"
+    
+    query_info = extract_query_from_text(text)
+    
+    if query_info:
+        return query_info, None
+    
+    return None, f"无法从图片中提取查询信息\n识别的文字:\n{text}"
 
 def get_token():
     """
@@ -726,7 +882,8 @@ def format_result_new(query_info, order_no, prod_no, items_info, progress_data):
         output.append(f"订单进度：客户 {query_info['params'][0]}")
     
     output.append("-" * 40)
-    output.append(f"【订单】{order_no}")
+    if prod_no:
+        output.append(f"【生产单号】{prod_no}")
     
     # 构建进度信息映射（使用索引和流水号）
     progress_map = {}
@@ -844,7 +1001,7 @@ def execute_query(input_text):
     return execute_query_new(input_text)
 
 # ==================== OpenClaw 适配 ====================
-def handle_tool(input_text: str = None) -> str:
+def handle_tool(input_text: str = None, image_data: str = None) -> str:
     """
     OpenClaw 工具入口函数
     
@@ -853,12 +1010,31 @@ def handle_tool(input_text: str = None) -> str:
             - 生产单号查询: "订单 *202608066" 或 "*202608066 进度"
             - 客户姓名查询: "客户 刘浩（员工） 订单" 或 "刘浩的订单"
             - 流水号查询: "流水号 11374" 或 "查流水号 11374 订单"
+        image_data: 图片数据（base64编码或文件路径），可选
     
     Returns:
         str: 查询结果文本
     """
+    if image_data:
+        query_info, error = process_image_query(image_data)
+        
+        if error:
+            return f"图片识别失败: {error}"
+        
+        if query_info:
+            extracted_info = query_info.get('extracted', '')
+            query_text = query_info['params'][0] if query_info['type'] == 'order' else \
+                        f"客户 {query_info['params'][0]}" if query_info['type'] == 'customer' else \
+                        f"流水号 {query_info['params'][0]}"
+            
+            try:
+                result = execute_query_new(query_text)
+                return f"📷 从图片识别到: {extracted_info}\n\n{result}"
+            except Exception as e:
+                return f"查询失败: {str(e)}"
+    
     if not input_text:
-        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374"
+        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374\n- 或发送图片自动识别"
     
     try:
         result = execute_query_new(input_text)
