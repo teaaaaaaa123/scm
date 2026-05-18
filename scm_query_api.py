@@ -40,6 +40,13 @@ QUERY_CONFIG = {
     "page_url": "http://api.ceyadi.cn/v1/order/page",
     "login_url": "http://api.ceyadi.cn/v1/oauth/getToken",
     
+    # 样衣订单API配置
+    "scm_sample_order_url": "https://scm.ceyadi.cn/api/admin/scm/ks/sampleOrder/page",
+    "scm_login_url": "https://scm.ceyadi.cn/api/admin/base/open/login",
+    "scm_username": "alpha唐山店",
+    "scm_password": "123456",
+    "scm_cached_token": None,
+    
     # 认证配置
     "access_key_id": "NeIFPBmDEbfs2Brp",
     "access_key_secret": "ec976ad7959b2245b7d3e002002e22b2",
@@ -83,6 +90,17 @@ QUERY_CONFIG = {
                 r"^流水号\s+(\d+)\s+(\d{4}-\d{2}-\d{2}).*$",
                 r"^查流水号\s+(\d+).*$",
                 r"^流水号\s+(\d+).*$"
+            ]
+        },
+        "sample_order": {
+            "name": "样衣订单查询",
+            "patterns": [
+                r"^样衣\s+(\S+)\s+(\d{4}-\d{2}-\d{2})$",
+                r"^样衣\s+(\S+)$",
+                r"^查样衣\s+(\S+)\s+(\d{4}-\d{2}-\d{2})$",
+                r"^查样衣\s+(\S+)$",
+                r"^样衣订单\s+(\S+)\s+(\d{4}-\d{2}-\d{2})$",
+                r"^样衣订单\s+(\S+)$"
             ]
         }
     }
@@ -177,6 +195,23 @@ def extract_query_from_text(text):
     """
     if not text:
         return None
+    
+    # 样衣订单识别 - 优先检查
+    sample_order_patterns = [
+        r'样衣[：:\s]*(\S+)',
+        r'查样衣[：:\s]*(\S+)',
+        r'样衣订单[：:\s]*(\S+)',
+    ]
+    
+    for pattern in sample_order_patterns:
+        matches = re.findall(pattern, text)
+        if matches:
+            return {
+                "type": "sample_order",
+                "params": [matches[0]],
+                "text": text,
+                "extracted": f"样衣: {matches[0]}"
+            }
     
     prod_no_patterns = [
         r'\*?\d{8,9}',
@@ -530,11 +565,16 @@ def execute_query_new(input_text):
         return "❌ 无法识别的查询格式。请使用以下格式之一：\n" \
                "1. 生产单号查询：订单 *202601442 或 查订单 *202601442\n" \
                "2. 客户姓名查询：查客户 陈兵 订单 或 客户 陈兵 订单\n" \
-               "3. 流水号查询：查流水号 16458 订单 或 流水号 16458 订单"
+               "3. 流水号查询：查流水号 16458 订单 或 流水号 16458 订单\n" \
+               "4. 样衣订单查询：样衣 24FW公司样衣 2024-05-05 或 查样衣 18964"
     
     print(f"✅ 查询类型: {query_info['name']}")
     print(f"📋 查询参数: {query_info['params']}")
     print(f"\n{'='*60}\n")
+    
+    # 处理样衣订单查询
+    if query_info["type"] == "sample_order":
+        return execute_sample_order_query(query_info)
     
     order_no = ""
     order_id = ""
@@ -1006,10 +1046,11 @@ def handle_tool(input_text: str = None, image_data: str = None) -> str:
     OpenClaw 工具入口函数
     
     Args:
-        input_text: 查询文本，支持三种格式：
+        input_text: 查询文本，支持四种格式：
             - 生产单号查询: "订单 *202608066" 或 "*202608066 进度"
-            - 客户姓名查询: "客户 刘浩（员工） 订单" 或 "刘浩的订单"
-            - 流水号查询: "流水号 11374" 或 "查流水号 11374 订单"
+            - 客户姓名查询: "客户 张嘉诚 订单" 或 "张嘉诚"
+            - 流水号查询: "流水号 12174" 或 "查流水号 12174 订单"
+            - 样衣订单查询: "样衣 24FW公司样衣 2024-05-05" 或 "查样衣 18964"
         image_data: 图片数据（base64编码或文件路径），可选
     
     Returns:
@@ -1025,7 +1066,8 @@ def handle_tool(input_text: str = None, image_data: str = None) -> str:
             extracted_info = query_info.get('extracted', '')
             query_text = query_info['params'][0] if query_info['type'] == 'order' else \
                         f"客户 {query_info['params'][0]}" if query_info['type'] == 'customer' else \
-                        f"流水号 {query_info['params'][0]}"
+                        f"流水号 {query_info['params'][0]}" if query_info['type'] == 'serial' else \
+                        f"样衣 {query_info['params'][0]}"
             
             try:
                 result = execute_query_new(query_text)
@@ -1034,13 +1076,182 @@ def handle_tool(input_text: str = None, image_data: str = None) -> str:
                 return f"查询失败: {str(e)}"
     
     if not input_text:
-        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374\n- 或发送图片自动识别"
+        return "请提供查询内容，例如：\n- 订单 *202608066\n- 客户 刘浩（员工） 订单\n- 流水号 11374\n- 样衣 24FW公司样衣 2024-05-05\n- 或发送图片自动识别"
     
     try:
         result = execute_query_new(input_text)
         return result
     except Exception as e:
         return f"查询失败: {str(e)}"
+
+# ==================== 样衣订单查询功能 ====================
+def get_scm_token():
+    """
+    获取SCM后台登录token
+    """
+    if QUERY_CONFIG.get("scm_cached_token"):
+        return QUERY_CONFIG["scm_cached_token"]
+    
+    login_url = QUERY_CONFIG["scm_login_url"]
+    username = QUERY_CONFIG["scm_username"]
+    password = QUERY_CONFIG["scm_password"]
+    
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+    
+    login_data = {
+        "username": username,
+        "password": password,
+        "lanange": "cn"
+    }
+    
+    try:
+        response = session.post(
+            login_url,
+            json=login_data,
+            headers={"Content-Type": "application/json"},
+            timeout=15
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            code = result.get("code", 0)
+            
+            if code == 1000:
+                token = result.get("data", {}).get("token")
+                if token:
+                    QUERY_CONFIG["scm_cached_token"] = token
+                    return token
+    except Exception as e:
+        print(f"SCM登录异常: {e}")
+    
+    return None
+
+def search_sample_orders(keyword, date=None):
+    """
+    搜索样衣订单
+    
+    Args:
+        keyword: 关键词（流水号或其他信息）
+        date: 目标日期（可选），格式：YYYY-MM-DD
+    
+    Returns:
+        list: 匹配的订单列表
+    """
+    token = get_scm_token()
+    if not token:
+        return None
+    
+    api_url = QUERY_CONFIG["scm_sample_order_url"]
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": token,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    data = {
+        "keyWord": keyword,
+        "order": "createTime",
+        "page": 1,
+        "size": 9999,
+        "sort": "desc"
+    }
+    
+    try:
+        response = requests.post(api_url, headers=headers, json=data, timeout=15)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("code") == 1000:
+                records = result.get("data", {}).get("list", [])
+                
+                # 如果有日期，按日期筛选
+                if date:
+                    filtered = []
+                    for record in records:
+                        create_time = record.get("createTime", "")
+                        if date in create_time:
+                            filtered.append(record)
+                    return filtered
+                
+                return records
+    except Exception as e:
+        print(f"样衣订单查询异常: {e}")
+    
+    return None
+
+def format_sample_order_result(records, keyword, date=None):
+    """
+    格式化样衣订单查询结果
+    
+    Args:
+        records: 订单记录列表
+        keyword: 查询关键词
+        date: 查询日期（可选）
+    
+    Returns:
+        str: 格式化的结果
+    """
+    output = []
+    output.append(f"样衣订单查询结果")
+    output.append("-" * 40)
+    output.append(f"查询条件: {keyword}")
+    if date:
+        output.append(f"日期: {date}")
+    output.append(f"找到: {len(records)} 条记录")
+    output.append("-" * 40)
+    
+    for idx, record in enumerate(records, 1):
+        output.append(f"\n【订单{idx}】")
+        output.append(f"ID: {record.get('id', 'N/A')}")
+        output.append(f"订单号: {record.get('orderNo', 'N/A')}")
+        output.append(f"客户名称: {record.get('customerName', 'N/A')}")
+        output.append(f"创建时间: {record.get('createTime', 'N/A')}")
+        output.append(f"状态: {record.get('status', 'N/A')}")
+        output.append(f"数量: {record.get('quantity', 'N/A')}")
+        
+        # 显示其他可能有用的字段
+        if record.get('productNo'):
+            output.append(f"产品编号: {record.get('productNo')}")
+        if record.get('styleNo'):
+            output.append(f"款号: {record.get('styleNo')}")
+    
+    return "\n".join(output)
+
+def execute_sample_order_query(query_info):
+    """
+    执行样衣订单查询
+    
+    Args:
+        query_info: 解析后的查询信息
+    
+    Returns:
+        str: 查询结果
+    """
+    params = query_info["params"]
+    keyword = params[0]
+    date = params[1] if len(params) > 1 else None
+    
+    print(f"🔍 样衣订单查询")
+    print(f"   关键词: {keyword}")
+    if date:
+        print(f"   日期: {date}")
+    
+    records = search_sample_orders(keyword, date)
+    
+    if records is None:
+        return "样衣订单查询失败"
+    
+    if len(records) == 0:
+        result_msg = f"未找到样衣订单: {keyword}"
+        if date:
+            result_msg += f" (日期: {date})"
+        return result_msg
+    
+    return format_sample_order_result(records, keyword, date)
 
 # ==================== 旧版命令行入口 ====================
 def main():
