@@ -1183,43 +1183,7 @@ def search_sample_orders(keyword, date=None):
     
     return None
 
-def format_sample_order_result(records, keyword, date=None):
-    """
-    格式化样衣订单查询结果
-    
-    Args:
-        records: 订单记录列表
-        keyword: 查询关键词
-        date: 查询日期（可选）
-    
-    Returns:
-        str: 格式化的结果
-    """
-    output = []
-    output.append(f"样衣订单查询结果")
-    output.append("-" * 40)
-    output.append(f"查询条件: {keyword}")
-    if date:
-        output.append(f"日期: {date}")
-    output.append(f"找到: {len(records)} 条记录")
-    output.append("-" * 40)
-    
-    for idx, record in enumerate(records, 1):
-        output.append(f"\n【订单{idx}】")
-        output.append(f"ID: {record.get('id', 'N/A')}")
-        output.append(f"订单号: {record.get('orderNo', 'N/A')}")
-        output.append(f"客户名称: {record.get('customerName', 'N/A')}")
-        output.append(f"创建时间: {record.get('createTime', 'N/A')}")
-        output.append(f"状态: {record.get('status', 'N/A')}")
-        output.append(f"数量: {record.get('quantity', 'N/A')}")
-        
-        # 显示其他可能有用的字段
-        if record.get('productNo'):
-            output.append(f"产品编号: {record.get('productNo')}")
-        if record.get('styleNo'):
-            output.append(f"款号: {record.get('styleNo')}")
-    
-    return "\n".join(output)
+
 
 def execute_sample_order_query(query_info):
     """
@@ -1251,7 +1215,63 @@ def execute_sample_order_query(query_info):
             result_msg += f" (日期: {date})"
         return result_msg
     
-    return format_sample_order_result(records, keyword, date)
+    output = []
+    if date:
+        output.append(f"样衣订单查询: {keyword} ({date})")
+    else:
+        output.append(f"样衣订单查询: {keyword}")
+    
+    output.append("-" * 60)
+    
+    for record in records:
+        sample_order_id = record.get('id', '')
+        prod_no = record.get('prodNo', '')
+        
+        print(f"\n🔍 样衣订单ID: {sample_order_id}")
+        
+        # 直接用样衣订单的ID去查询原系统的订单详情和明细
+        order_info = query_order_info(sample_order_id)
+        items_info = query_order_items(sample_order_id)
+        
+        # 用prodNo查询生产进度
+        progress_data = None
+        if prod_no:
+            progress_data = query_progress_by_order_numbers([prod_no])
+        
+        if items_info:
+            # 找到了详细信息，用原来的格式化函数
+            order_no = record.get('orderNo', '')
+            temp_output = format_result_new(
+                {"type": "order", "params": [prod_no]},
+                order_no,
+                prod_no,
+                items_info,
+                progress_data
+            )
+            # 去掉开头重复的标题行
+            temp_lines = temp_output.split('\n')
+            output.extend(temp_lines[2:])
+        else:
+            # 没有详细信息，简化显示
+            output.append(f"【生产单号】{prod_no}")
+            serial_list = record.get('serialNoList', '')
+            if serial_list:
+                output.append(f"流水号: {serial_list}")
+            
+            basic_lines = []
+            quantity = record.get('quantity', 0)
+            if quantity > 0:
+                basic_lines.append(f"数量:{quantity}")
+            
+            if basic_lines:
+                output.append(f"    {' | '.join(basic_lines)}")
+            output.append("")
+    
+    # 如果找到多条记录，显示找到的数量
+    if len(records) > 1:
+        output.insert(2, f"找到: {len(records)} 条记录")
+    
+    return "\n".join(output)
 
 # ==================== 旧版命令行入口 ====================
 def main():
