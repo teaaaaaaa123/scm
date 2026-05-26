@@ -43,13 +43,13 @@ QUERY_CONFIG = {
     # 样衣订单API配置
     "scm_sample_order_url": "https://scm.ceyadi.cn/api/admin/scm/ks/sampleOrder/page",
     "scm_login_url": "https://scm.ceyadi.cn/api/admin/base/open/login",
-    "scm_username": "alpha唐山店",
-    "scm_password": "123456",
+    "scm_username": "xx",
+    "scm_password": "xx",
     "scm_cached_token": None,
     
     # 认证配置
-    "access_key_id": "NeIFPBmDEbfs2Brp",
-    "access_key_secret": "ec976ad7959b2245b7d3e002002e22b2",
+    "access_key_id": "xx",
+    "access_key_secret": "xx",
     
     # 缓存的token
     "cached_token": None,
